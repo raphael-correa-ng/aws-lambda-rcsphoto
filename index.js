@@ -40,44 +40,36 @@ exports.handler = async (event) => {
 
     switch (eventName) {
         case 'ObjectCreated:Put':
+            console.log('Handling put');
             await handlePut(bucketName, keyDecoded);
             break;
         case 'ObjectRemoved:Delete':
+            console.log('Handling delete');
             await handleDelete(bucketName, keyDecoded);
             break;
     }
-
 };
 
 const handlePut = async (bucketName, key) => {
-    console.log('Handling put');
-    const s3Object = await s3Client.getObject({
-        Bucket: bucketName,
-        Key: key,
-    })
-    await generateSizes(bucketName, key, s3Object);
-};
-
-const handleDelete = async (bucketName, key) => {
-    console.log('Handling delete');
-    for (const size of Object.keys(sizes)) {
-        const keyToDelete = fileNameToSize(key, size);
-        console.log(`Deleting ${bucketName}/${keyToDelete}`);
-        await s3Client.deleteObject({
-            Bucket: bucketName,
-            Key: keyToDelete
-        });
-    }
-};
-
-const generateSizes = async (bucketName, key, s3Object) => {
-    const imageAsBuffer = await streamToBuffer(s3Object.Body)
+    console.log(`Getting ${bucketName}/{key}`)
+    const s3Object = await s3Client.getObject({ Bucket: bucketName, Key: key });
+    const imageAsBuffer = await streamToBuffer(s3Object.Body);
     const sharpImage = await sharp(imageAsBuffer);
     const metadata = await sharpImage.metadata();
     const promises = Object.keys(sizes)
         .map(size => generateSize(bucketName, key, size, sharpImage, metadata));
     await Promise.all(promises);
-}
+};
+
+const handleDelete = async (bucketName, key) => {
+    const promises = Object.keys(sizes)
+        .map(size => {
+            const keyToDelete = fileNameToSize(key, size);
+            console.log(`Deleting ${bucketName}/${keyToDelete}`);
+            return s3Client.deleteObject({ Bucket: bucketName, Key: keyToDelete });
+        });
+    await Promise.all(promises);
+};
 
 const generateSize = async (bucketName, key, size, sharpImage, metadata) => {
     const { width, height } = metadata;
@@ -104,19 +96,22 @@ const generateSize = async (bucketName, key, size, sharpImage, metadata) => {
         Body: resizedImage,
         ContentType: 'image/jpeg'
     };
+
     console.log(`Saving ${params.Key}`);
+
     return s3Client.putObject(params);
 }
 
-const streamToBuffer = (stream) =>
-    new Promise((resolve, reject) => {
+const streamToBuffer = (stream) => {
+    return new Promise((resolve, reject) => {
         const chunks = [];
         stream.on('data', chunk => chunks.push(chunk));
         stream.on('error', reject);
         stream.on('end', () => resolve(Buffer.concat(chunks)));
     });
+};
 
 const fileNameToSize = (key, size) => {
     const [albumName, _, fileName] = key.split('/');
     return `${albumName}/${size}/${fileName}`;
-}
+};
