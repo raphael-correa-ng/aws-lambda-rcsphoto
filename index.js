@@ -27,16 +27,23 @@ exports.handler = async (event) => {
 
     const folderName = key.split('/')[1];
     if (folderName !== 'full') {
+        console.log(`Not master folder: ${key} - exiting`);
         return;
     }
 
+    if(!key.match(/\.(jpg|jpeg|png|gif)$/i)) {
+        console.log(`Not an image: ${key} - exiting`);
+        return;
+    }
+
+    const keyDecoded = decodeURIComponent(key.replace(/\+/g, ' '));
+
     switch (eventName) {
         case 'ObjectCreated:Put':
-            await handlePut(bucketName, key);
+            await handlePut(bucketName, keyDecoded);
             break;
         case 'ObjectRemoved:Delete':
-            // todo: create a separate lambda for the clean up
-            await handleDelete(bucketName, key);
+            await handleDelete(bucketName, keyDecoded);
             break;
     }
 
@@ -44,18 +51,24 @@ exports.handler = async (event) => {
 
 const handlePut = async (bucketName, key) => {
     console.log('Handling put');
-    const s3Object = await tryGetS3Object(bucketName, key);
-    // todo: assert content type
+    const s3Object = await s3Client.getObject({
+        Bucket: bucketName,
+        Key: key,
+    })
     await generateSizes(bucketName, key, s3Object);
 };
 
 const handleDelete = async (bucketName, key) => {
     console.log('Handling delete');
     for (const size of Object.keys(sizes)) {
-        await tryDeleteS3Object(bucketName, fileNameToSize(key, size));
+        const keyToDelete = fileNameToSize(key, size);
+        console.log(`Deleting ${bucketName}/${keyToDelete}`);
+        await s3Client.deleteObject({
+            Bucket: bucketName,
+            Key: keyToDelete
+        });
     }
 };
-
 
 const generateSizes = async (bucketName, key, s3Object) => {
     const imageAsBuffer = await streamToBuffer(s3Object.Body)
@@ -107,30 +120,3 @@ const fileNameToSize = (key, size) => {
     const [albumName, _, fileName] = key.split('/');
     return `${albumName}/${size}/${fileName}`;
 }
-
-const tryGetS3Object = async (bucketName, key) => {
-    const params = {
-        Bucket: bucketName,
-        Key: decodeURIComponent(key.replace(/\+/g, ' ')),
-    };
-    try {
-        return await s3Client.getObject(params);
-    } catch (err) {
-        console.log(err);
-        throw err;
-    }
-};
-
-const tryDeleteS3Object = async (bucketName, key) => {
-    const params = {
-        Bucket: bucketName,
-        Key: decodeURIComponent(key.replace(/\+/g, ' '))
-    };
-    try {
-        console.log(`Deleting ${bucketName}/${key}`);
-        await s3Client.deleteObject(params);
-    } catch (err) {
-        console.log(err);
-        throw err;
-    }
-};
