@@ -1,5 +1,6 @@
 const { S3 } = require('@aws-sdk/client-s3');
 const sharp = require('sharp');
+const mime = require('mime');
 
 const s3Client = new S3();
 
@@ -86,7 +87,6 @@ const generateSize = async (bucketName, key, size, sharpImage, metadata) => {
 
     const resizedImage = await sharpImage
         .resize({ width: newWidth, height: newHeight })
-        .jpeg({ quality: 100 })
         .withMetadata()
         .toBuffer();
 
@@ -94,7 +94,7 @@ const generateSize = async (bucketName, key, size, sharpImage, metadata) => {
         Bucket: bucketName,
         Key: fileNameToSize(key, size),
         Body: resizedImage,
-        ContentType: 'image/jpeg'
+        ContentType: mime.getType(key)
     };
 
     console.log(`Saving ${params.Key}`);
