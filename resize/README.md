@@ -1,8 +1,7 @@
-# Lambda 'resizeImage'
+# Lambda 'resize'
 
 ### description
-- generates various sizes for a given image
-- cleans up the sizes if an image is deleted
+- generates various sizes for a recently uploaded image
 
 ### usage
 - create a zipfile with the contents of this folder (including node_modules)

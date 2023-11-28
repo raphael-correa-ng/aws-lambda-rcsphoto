@@ -32,7 +32,7 @@ exports.handler = async (event) => {
         return;
     }
 
-    if(!key.match(/\.(jpg|jpeg|png|gif)$/i)) {
+    if(!mime.getType(key).includes('image')) {
         console.log(`Not an image: ${key} - exiting`);
         return;
     }
@@ -43,10 +43,6 @@ exports.handler = async (event) => {
         case 'ObjectCreated:Put':
             console.log('Handling put');
             await handlePut(bucketName, keyDecoded);
-            break;
-        case 'ObjectRemoved:Delete':
-            console.log('Handling delete');
-            await handleDelete(bucketName, keyDecoded);
             break;
     }
 };
@@ -59,16 +55,6 @@ const handlePut = async (bucketName, key) => {
     const metadata = await sharpImage.metadata();
     const promises = Object.keys(sizes)
         .map(size => generateSize(bucketName, key, size, sharpImage, metadata));
-    await Promise.all(promises);
-};
-
-const handleDelete = async (bucketName, key) => {
-    const promises = Object.keys(sizes)
-        .map(size => {
-            const keyToDelete = fileNameToSize(key, size);
-            console.log(`Deleting ${bucketName}/${keyToDelete}`);
-            return s3Client.deleteObject({ Bucket: bucketName, Key: keyToDelete });
-        });
     await Promise.all(promises);
 };
 
