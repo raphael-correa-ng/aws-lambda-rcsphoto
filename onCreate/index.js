@@ -1,6 +1,7 @@
 const { S3 } = require('@aws-sdk/client-s3');
 const sharp = require('sharp');
 const mime = require('mime');
+const ExifReader = require('exifreader');
 
 const s3Client = new S3();
 
@@ -48,15 +49,23 @@ exports.handler = async (event) => {
 };
 
 const handlePut = async (bucketName, key) => {
-    console.log(`Getting ${bucketName}/{key}`)
+    console.log(`Getting ${bucketName}/${key}`)
     const s3Object = await s3Client.getObject({ Bucket: bucketName, Key: key });
     const imageAsBuffer = await streamToBuffer(s3Object.Body);
+
+    readExif(imageAsBuffer);
+
     const sharpImage = await sharp(imageAsBuffer);
     const metadata = await sharpImage.metadata();
     const promises = Object.keys(sizes)
         .map(size => generateSize(bucketName, key, size, sharpImage, metadata));
     await Promise.all(promises);
 };
+
+const readExif = (imageAsBuffer) => {
+    const exif = ExifReader.load(imageAsBuffer);
+    console.log(exif);
+}
 
 const generateSize = async (bucketName, key, size, sharpImage, metadata) => {
     const { width, height } = metadata;
